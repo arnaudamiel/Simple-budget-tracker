@@ -29,6 +29,8 @@ Cross-compile the Go application for your Linux server. Run this on your develop
 GOOS=linux GOARCH=amd64 go build -o budget main.go
 ```
 
+Adjust OS and ARCHitecture as required
+
 ### 2. Copy Files to Server
 
 Create a directory on your server and copy the necessary files.
@@ -84,6 +86,9 @@ ExecStart=/opt/budget/budget
 Restart=always
 RestartSec=5
 
+# Optional: Security hardening
+ProtectSystem=full
+
 [Install]
 WantedBy=multi-user.target
 ```
@@ -103,6 +108,36 @@ sudo systemctl status budget
 ```
 
 The server is now listening on port **8910** (HTTP).
+
+### 5. Logging Setup
+
+The application logs transactions and unauthorized attempts to `/var/log/budget`. You need to create this directory and configure log rotation.
+
+1. **Create the Log Directory**:
+   
+   ```bash
+   sudo mkdir -p /var/log/budget
+   # The service runs as root by default, so standard permissions are fine.
+   # If you change the service user, ensure they have write access:
+   # sudo chown -R budget-user:budget-user /var/log/budget
+   ```
+
+2. **Configure Log Rotation**:
+   
+   We use `logrotate` to rotate logs monthly and keep them for a year.
+   
+   Copy the `budget.logrotate` file to `/etc/logrotate.d/budget`:
+   
+   ```bash
+   sudo cp budget.logrotate /etc/logrotate.d/budget
+   sudo chmod 644 /etc/logrotate.d/budget
+   sudo chown root:root /etc/logrotate.d/budget
+   ```
+   
+   To test the configuration (dry run):
+   ```bash
+   sudo logrotate -d /etc/logrotate.d/budget
+   ```
 
 ---
 
@@ -191,7 +226,7 @@ The Go backend has built-in HTTPS support on port **8911**.
 
 ### 3. Accessing the App
 
- Navigate to: `https://your-domain.com:8911/budget/budget.html` (if serving static files alongside) OR ensuring your Web Server (Nginx/Apache) handles SSL and serves the HTML.
+Navigate to: `https://your-domain.com:8911/budget/budget.html` (if serving static files alongside) OR ensuring your Web Server (Nginx/Apache) handles SSL and serves the HTML.
 
 ---
 
@@ -200,17 +235,19 @@ The Go backend has built-in HTTPS support on port **8911**.
 Once your server is running with HTTPS, your users can "install" the website as an app on their phones.
 
 ### iOS (iPhone/iPad)
-1.  Open Safari.
-2.  Navigate to your app URL (e.g., `https://your-domain.com/budget/budget.html`).
-3.  Tap the **Share** button (box with an arrow pointing up) at the bottom.
-4.  Scroll down and tap **Add to Home Screen**.
-5.  Tap **Add**.
-6.  The app icon will appear on the home screen.
+
+1. Open Safari.
+2. Navigate to your app URL (e.g., `https://your-domain.com/budget/budget.html`).
+3. Tap the **Share** button (box with an arrow pointing up) at the bottom.
+4. Scroll down and tap **Add to Home Screen**.
+5. Tap **Add**.
+6. The app icon will appear on the home screen.
 
 ### Android (Chrome)
-1.  Open Chrome.
-2.  Navigate to your app URL.
-3.  Tap the **Menu** button (three dots) in the top-right corner.
-4.  Tap **Install App** or **Add to Home Screen**.
-5.  Tap **Install** to confirm.
-6.  The app will be installed and appear in your app drawer/home screen.
+
+1. Open Chrome.
+2. Navigate to your app URL.
+3. Tap the **Menu** button (three dots) in the top-right corner.
+4. Tap **Install App** or **Add to Home Screen**.
+5. Tap **Install** to confirm.
+6. The app will be installed and appear in your app drawer/home screen.

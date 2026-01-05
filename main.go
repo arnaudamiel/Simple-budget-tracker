@@ -19,8 +19,9 @@ const (
 	httpsPort           = ":8911"
 	dbFile              = "budget.dat"
 	usersFile           = "users"
-	logFile             = "transactions.csv"
-	unauthLogFile       = "unauthorized.log"
+	logDir              = "/var/log/budget"
+	logFile             = logDir + "/transactions.csv"
+	unauthLogFile       = logDir + "/unauthorized.log"
 	certFile            = "cert.pem"
 	keyFile             = "key.pem"
 	maxBalance    int32 = 2000000000 // Cap at ~£20m to prevent overflow wrapping in 32-bit math
