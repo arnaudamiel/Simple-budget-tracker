@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Budget">
+    <title>Budget</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #ffffff;
+            --input-bg: #2d2d2d;
+            --primary-color: #bb86fc;
+            --danger-color: #cf6679;
+            --success-color: #03dac6;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0 0 16px 0;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #balance-display {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 32px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pence {
+            font-size: 0.75em;
+            vertical-align: baseline;
+        }
+
+        .positive {
+            color: var(--success-color);
+        }
+
+        .negative {
+            color: var(--danger-color);
+        }
+
+        .input-group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.2rem;
+            background-color: var(--input-bg);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            color: white;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--primary-color);
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            margin-bottom: 12px;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-update {
+            background-color: var(--primary-color);
+            color: #000;
+        }
+
+        .btn-reset {
+            background-color: transparent;
+            border: 1px solid #444;
+            color: #888;
+            font-size: 0.8rem;
+            padding: 8px;
+            width: auto;
+            margin-top: 16px;
+        }
+
+
+
+        #user-select-container {
+            margin-bottom: 20px;
+        }
+
+        .user-badge {
+            font-size: 0.8rem;
+            background: #333;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            color: var(--text-color);
+        }
+
+        .btn-cancel {
+            background-color: transparent;
+            border: 1px solid #444;
+            color: #ccc;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- User Selection Screen -->
+    <div id="user-selection" class="container hidden">
+        <h1>Select User</h1>
+        <div class="input-group">
+            <input type="text" id="user-input" placeholder="Enter User ID" style="text-transform: uppercase;"
+                autocomplete="off">
+        </div>
+        <button class="btn-update" onclick="saveUser()">Continue</button>
+    </div>
+
+    <!-- Main App Screen -->
+    <div id="app-content" class="container hidden">
+        <div onclick="switchUser()" class="user-badge" id="current-user-badge">User: ?</div>
+        <h1>Budget</h1>
+        <div id="balance-display">Loading...</div>
+
+        <div class="input-group">
+            <label for="spent-input">Spent (pence)</label>
+            <input type="number" id="spent-input" pattern="[0-9]*" inputmode="numeric" placeholder="0"
+                autocomplete="off">
+        </div>
+
+        <button class="btn-update" onclick="handleSpend()">Update</button>
+
+        <br>
+        <button class="btn-reset" onclick="openResetModal()">Reset Manual Value</button>
+    </div>
+
+    <!-- Reset Modal -->
+    <div id="reset-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>Reset Balance</h2>
+            <div class="input-group">
+                <label for="reset-input">New Balance (pence)</label>
+                <input type="number" id="reset-input" pattern="[0-9]*" inputmode="numeric" placeholder="e.g. 5000"
+                    autocomplete="off">
+            </div>
+            <button class="btn-update" onclick="confirmReset()">Confirm</button>
+            <button class="btn-cancel" onclick="closeResetModal()">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Budget PWA Client Script
+         * Handles user selection, server communication, offline capabilities, and UI updates.
+         */
+
+        // Determine SERVER_URL based on protocol
+        // If loaded via HTTPS (e.g. PWA), use secure port 8911
+        // If loaded via HTTP or File, use standard port 8910
+        const PROTOCOL = window.location.protocol;
+        const PORT = PROTOCOL === 'https:' ? '8911' : '8910';
+        // Note: We hardcode amiel.uk as the server host.
+        // If file://, protocol is 'file:', so it falls back to 8910 which is correct.
+        const SERVER_URL = `${PROTOCOL === 'https:' ? 'https:' : 'http:'}//${window.location.hostname}:${PORT}`;
+
+        /**
+         * Maximum safe integer for 32-bit signed server logic (approx 2 billion).
+         * Matches the server's maxBalance constant.
+         */
+        const MAX_LIMIT = 2000000000;
+
+        let USER = localStorage.getItem('budget_user');
+
+        // Service Worker: Registers the SW for offline support and caching
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+
+        /**
+         * Initializes the application state.
+         * Redirects to user selection if no user is found in localStorage.
+         */
+        function init() {
+            if (!USER) {
+                document.getElementById('user-selection').classList.remove('hidden');
+                document.getElementById('app-content').classList.add('hidden');
+            } else {
+                document.getElementById('user-selection').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+                document.getElementById('current-user-badge').innerText = `User: ${USER}`;
+                fetchBalance();
+            }
+        }
+
+        /**
+         * Saves the user ID entered in the input field.
+         */
+        function saveUser() {
+            const input = document.getElementById('user-input');
+            const val = input.value.trim().toUpperCase();
+            if (val) {
+                USER = val;
+                localStorage.setItem('budget_user', USER);
+                init();
+            }
+        }
+
+        /**
+         * Clears the current user and resets the app state.
+         */
+        function switchUser() {
+            if (confirm('Switch user?')) {
+                localStorage.removeItem('budget_user');
+                USER = null;
+                init();
+            }
+        }
+
+        /**
+         * Fetches the current balance from the backend.
+         */
+        async function fetchBalance() {
+            try {
+                const res = await fetch(`${SERVER_URL}/get`, {
+                    headers: { 'Authorization': USER }
+                });
+                if (!res.ok) throw new Error('Failed to fetch');
+                const text = await res.text();
+                updateDisplay(parseInt(text, 10));
+            } catch (e) {
+                console.error(e);
+                document.getElementById('balance-display').innerText = 'Error';
+                document.getElementById('balance-display').style.color = 'red';
+            }
+        }
+
+        /**
+         * Renders the balance with appropriate styling for positive/negative values.
+         * Formats pence into pounds (e.g., 1050 -> 10.50).
+         */
+        function updateDisplay(pence) {
+            const display = document.getElementById('balance-display');
+            display.className = pence >= 0 ? 'positive' : 'negative';
+
+            let valStr = Math.abs(pence).toString();
+            if (valStr.length < 2) valStr = '0' + valStr;
+
+            const p2 = valStr.slice(-2);
+            const p1 = valStr.length > 2 ? valStr.slice(0, -2) : '0';
+
+            display.innerHTML = `${pence < 0 ? '-' : ''}${p1}<span class="pence">${p2}</span>`;
+        }
+
+        /**
+         * Validates the input amount.
+         * Checks for NaN and exceeds 32-bit limit.
+         */
+        function isValidAmount(val) {
+            if (isNaN(val)) {
+                alert("Invalid number");
+                return false;
+            }
+            if (Math.abs(val) > MAX_LIMIT) {
+                alert(`Value too large! Limit is ${MAX_LIMIT} pence.`);
+                return false;
+            }
+            return true;
+        }
+
+        /**
+         * Handles the 'Spend' action.
+         * Sends a POST request to reduce the balance.
+         */
+        async function handleSpend() {
+            const input = document.getElementById('spent-input');
+            const val = parseInt(input.value, 10);
+
+            if (!isValidAmount(val)) return;
+
+            try {
+                const res = await fetch(`${SERVER_URL}/spend`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': USER,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ amount: val })
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText || 'Update failed');
+                }
+
+                const text = await res.text();
+                updateDisplay(parseInt(text, 10));
+                input.value = '';
+            } catch (e) {
+                alert('Failed to update: ' + e.message);
+            }
+        }
+
+        // --- Modal Functions ---
+
+        function openResetModal() {
+            document.getElementById('reset-modal').classList.remove('hidden');
+            document.getElementById('reset-input').focus();
+        }
+
+        function closeResetModal() {
+            document.getElementById('reset-modal').classList.add('hidden');
+            document.getElementById('reset-input').value = '';
+        }
+
+        /**
+         * Handles the 'Reset' action from the modal.
+         * Sends a POST request to set the absolute balance.
+         */
+        async function confirmReset() {
+            const input = document.getElementById('reset-input');
+            const val = parseInt(input.value, 10);
+
+            if (!isValidAmount(val)) return;
+
+            try {
+                const res = await fetch(`${SERVER_URL}/set`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': USER,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ amount: val })
+                });
+
+                if (!res.ok) throw new Error('Reset failed');
+
+                const text = await res.text();
+                updateDisplay(parseInt(text, 10));
+                closeResetModal();
+            } catch (e) {
+                alert('Failed to reset: ' + e.message);
+            }
+        }
+
+        // Auto-refresh when app becomes visible to ensure data freshness
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && USER) {
+                fetchBalance();
+            }
+        });
+
+        // Initial load
+        window.addEventListener('load', init);
+    </script>
+</body>
+
+</html>

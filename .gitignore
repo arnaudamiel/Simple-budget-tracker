@@ -1,0 +1,13 @@
+users
+budget.dat
+transactions.csv
+unauthorized.log
+cert.pem
+key.pem
+
+# Binaries
+budget.exe
+# The usage of "budget" matches both the binary and the folder.
+# We exclude "budget" generally, but then explicitly re-include the folder "budget/"
+budget
+!budget/
