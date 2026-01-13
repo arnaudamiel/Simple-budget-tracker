@@ -19,6 +19,7 @@
             --primary-color: #bb86fc;
             --danger-color: #cf6679;
             --success-color: #03dac6;
+            --secondary-text: #aaaaaa;
         }
 
         body {
@@ -46,11 +47,21 @@
         }
 
         h1 {
-            margin: 0 0 16px 0;
+            margin: 0 0 8px 0;
             font-size: 1.5rem;
             color: var(--primary-color);
             text-transform: uppercase;
             letter-spacing: 2px;
+        }
+
+        #budget-display {
+            font-size: 1.2rem;
+            color: var(--secondary-text);
+            margin-bottom: 24px;
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-decoration-color: #555;
         }
 
         #balance-display {
@@ -137,8 +148,6 @@
             margin-top: 16px;
         }
 
-
-
         #user-select-container {
             margin-bottom: 20px;
         }
@@ -180,6 +189,7 @@
         .modal h2 {
             margin-top: 0;
             color: var(--text-color);
+            margin-bottom: 20px;
         }
 
         .btn-cancel {
@@ -209,6 +219,7 @@
     <div id="app-content" class="container hidden">
         <div onclick="switchUser()" class="user-badge" id="current-user-badge">User: ?</div>
         <h1>Budget</h1>
+        <div id="budget-display" onclick="openBudgetModal()">Budget: £0</div>
         <div id="balance-display">Loading...</div>
 
         <div class="input-group">
@@ -223,7 +234,7 @@
         <button class="btn-reset" onclick="openResetModal()">Reset Manual Value</button>
     </div>
 
-    <!-- Reset Modal -->
+    <!-- Reset Modal (Manually Set Balance) -->
     <div id="reset-modal" class="modal-overlay hidden">
         <div class="modal">
             <h2>Reset Balance</h2>
@@ -237,30 +248,42 @@
         </div>
     </div>
 
+    <!-- Budget Modal (Set Initial Budget) -->
+    <div id="budget-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>Set Budget</h2>
+            <div class="input-group">
+                <label for="budget-input">New Budget (Pounds)</label>
+                <input type="number" id="budget-input" pattern="[0-9]*" inputmode="numeric" placeholder="e.g. 700"
+                    autocomplete="off">
+            </div>
+            <button class="btn-update" onclick="confirmBudget()">Update Budget</button>
+            <button class="btn-cancel" onclick="closeBudgetModal()">Cancel</button>
+        </div>
+    </div>
+
     <script>
         /**
          * Budget PWA Client Script
          * Handles user selection, server communication, offline capabilities, and UI updates.
+         * 
+         * Key Features:
+         * - Responsive UI for mobile/desktop
+         * - Service Worker for offline caching
+         * - Budget and Balance tracking
+         * - User authentication (basic ID check)
          */
 
-        // Determine SERVER_URL based on protocol
-        // If loaded via HTTPS (e.g. PWA), use secure port 8911
-        // If loaded via HTTP or File, use standard port 8910
         const PROTOCOL = window.location.protocol;
         const PORT = PROTOCOL === 'https:' ? '8911' : '8910';
-        // Note: We hardcode amiel.uk as the server host.
-        // If file://, protocol is 'file:', so it falls back to 8910 which is correct.
         const SERVER_URL = `${PROTOCOL === 'https:' ? 'https:' : 'http:'}//${window.location.hostname}:${PORT}`;
 
-        /**
-         * Maximum safe integer for 32-bit signed server logic (approx 2 billion).
-         * Matches the server's maxBalance constant.
-         */
         const MAX_LIMIT = 2000000000;
 
         let USER = localStorage.getItem('budget_user');
+        // Store current budget locally for prefilling modal
+        let currentBudgetPence = 0;
 
-        // Service Worker: Registers the SW for offline support and caching
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
@@ -271,7 +294,7 @@
 
         /**
          * Initializes the application state.
-         * Redirects to user selection if no user is found in localStorage.
+         * Checks for a stored user. If found, loads the main app; otherwise, shows login.
          */
         function init() {
             if (!USER) {
@@ -286,7 +309,7 @@
         }
 
         /**
-         * Saves the user ID entered in the input field.
+         * Saves the user ID to local storage and initializes the app.
          */
         function saveUser() {
             const input = document.getElementById('user-input');
@@ -298,9 +321,6 @@
             }
         }
 
-        /**
-         * Clears the current user and resets the app state.
-         */
         function switchUser() {
             if (confirm('Switch user?')) {
                 localStorage.removeItem('budget_user');
@@ -310,7 +330,8 @@
         }
 
         /**
-         * Fetches the current balance from the backend.
+         * Fetches the current balance and budget from the backend.
+         * Handling JSON response: { balance: int, budget: int }
          */
         async function fetchBalance() {
             try {
@@ -318,18 +339,30 @@
                     headers: { 'Authorization': USER }
                 });
                 if (!res.ok) throw new Error('Failed to fetch');
-                const text = await res.text();
-                updateDisplay(parseInt(text, 10));
+
+                // Attempt to parse JSON
+                const data = await res.json();
+
+                // Update Balance
+                updateDisplay(data.balance);
+
+                // Update Budget
+                currentBudgetPence = data.budget || 0;
+                updateBudgetDisplay(currentBudgetPence);
+
             } catch (e) {
                 console.error(e);
+                // Fallback for robustness? Or just error.
                 document.getElementById('balance-display').innerText = 'Error';
                 document.getElementById('balance-display').style.color = 'red';
             }
         }
 
         /**
-         * Renders the balance with appropriate styling for positive/negative values.
-         * Formats pence into pounds (e.g., 1050 -> 10.50).
+         * Updates the numeric balance display.
+         * Formats the value (pence) into Pounds and Pence with appropriate styling.
+         * 
+         * @param {number} pence - The balance in pence.
          */
         function updateDisplay(pence) {
             const display = document.getElementById('balance-display');
@@ -345,8 +378,20 @@
         }
 
         /**
-         * Validates the input amount.
-         * Checks for NaN and exceeds 32-bit limit.
+         * Updates the budget display at the top.
+         * Display is in Pounds (pence / 100).
+         */
+        function updateBudgetDisplay(pence) {
+            const pounds = Math.floor(pence / 100);
+            document.getElementById('budget-display').innerText = `Budget: £${pounds}`;
+        }
+
+        /**
+         * Validates a monetary input value.
+         * Checks if it is a number and within the global MAX_LIMIT.
+         * 
+         * @param {number} val - The value to check.
+         * @returns {boolean} True if valid, false otherwise.
          */
         function isValidAmount(val) {
             if (isNaN(val)) {
@@ -361,8 +406,8 @@
         }
 
         /**
-         * Handles the 'Spend' action.
-         * Sends a POST request to reduce the balance.
+         * Handles the spending action.
+         * Sends a POST request to /spend with the input amount.
          */
         async function handleSpend() {
             const input = document.getElementById('spent-input');
@@ -385,6 +430,10 @@
                     throw new Error(errText || 'Update failed');
                 }
 
+                // POST returns the new balance (int)
+                // Wait, logic check: Server returns INT for /spend.
+                // We should refetch to get budget sync? 
+                // Alternatively, just update balance from response.
                 const text = await res.text();
                 updateDisplay(parseInt(text, 10));
                 input.value = '';
@@ -405,10 +454,6 @@
             document.getElementById('reset-input').value = '';
         }
 
-        /**
-         * Handles the 'Reset' action from the modal.
-         * Sends a POST request to set the absolute balance.
-         */
         async function confirmReset() {
             const input = document.getElementById('reset-input');
             const val = parseInt(input.value, 10);
@@ -435,14 +480,74 @@
             }
         }
 
-        // Auto-refresh when app becomes visible to ensure data freshness
+        // --- Budget Modal Functions ---
+
+        function openBudgetModal() {
+            document.getElementById('budget-modal').classList.remove('hidden');
+            const input = document.getElementById('budget-input');
+
+            // Prefill with current budget in pounds
+            input.value = Math.floor(currentBudgetPence / 100);
+            input.focus();
+        }
+
+        function closeBudgetModal() {
+            document.getElementById('budget-modal').classList.add('hidden');
+            document.getElementById('budget-input').value = '';
+        }
+
+        /**
+         * Confirms and sends the new budget to the server.
+         * Validates input (including the £20m limit) before sending.
+         */
+        async function confirmBudget() {
+            const input = document.getElementById('budget-input');
+            const poundsVal = parseInt(input.value, 10);
+
+            if (isNaN(poundsVal) || poundsVal < 0) {
+                alert("Please enter a valid positive number for the budget.");
+                return;
+            }
+
+            if (poundsVal > MAX_LIMIT / 100) {
+                alert(`Budget cannot exceed £${(MAX_LIMIT / 100).toLocaleString()}`);
+                return;
+            }
+
+            // Convert Pounds to Pence
+            const penceVal = poundsVal * 100;
+
+            if (!isValidAmount(penceVal)) return;
+
+            try {
+                const res = await fetch(`${SERVER_URL}/set_budget`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': USER,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ budget: penceVal })
+                });
+
+                if (!res.ok) throw new Error('Update failed');
+
+                const data = await res.json();
+                updateDisplay(data.balance);
+                currentBudgetPence = data.budget;
+                updateBudgetDisplay(currentBudgetPence);
+
+                closeBudgetModal();
+            } catch (e) {
+                alert('Failed to set budget: ' + e.message);
+            }
+        }
+
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && USER) {
                 fetchBalance();
             }
         });
 
-        // Initial load
         window.addEventListener('load', init);
     </script>
 </body>

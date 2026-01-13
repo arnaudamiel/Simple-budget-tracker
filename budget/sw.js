@@ -1,5 +1,5 @@
 // Service Worker Version - Increment this to trigger update on client devices
-const CACHE_NAME = 'budget-pwa-v4';
+const CACHE_NAME = 'budget-pwa-v5';
 
 // Files to cache for offline access
 const ASSETS = [
@@ -32,9 +32,11 @@ self.addEventListener('activate', (e) => {
 });
 
 // Fetch Event: Serve from cache first, then network (Stale-While-Revalidate/Cache-First strategy for shell)
+// This ensures the app loads immediately from cache, even if offline.
 self.addEventListener('fetch', (e) => {
     e.respondWith(
         caches.match(e.request).then((response) => {
+            // Return cached response if found, otherwise fetch from network
             return response || fetch(e.request);
         })
     );
