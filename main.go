@@ -206,28 +206,39 @@ func (s *Server) loadData() error {
 }
 
 // saveData writes the current balance and budget to disk as 8 bytes little-endian.
-//
-// TODO: Implement atomic save to prevent data corruption during a crash.
-// Current implementation truncates the file before writing perfectly, which is risky.
-// Proposed fix:
-// 1. Write data to a temporary file (e.g., budget.dat.tmp).
-// 2. Sync the temp file to disk.
-// 3. Rename the temp file to dbFile (atomic operation on POSIX).
+// It uses an atomic save strategy: write to temp file -> sync -> rename.
 func (s *Server) saveData() error {
 	data := make([]byte, 8)
 	binary.LittleEndian.PutUint32(data[0:4], uint32(s.balance))
 	binary.LittleEndian.PutUint32(data[4:8], uint32(s.budget))
 
-	f, err := os.OpenFile(dbFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	// 1. Write to a temporary file
+	tmpFile := dbFile + ".tmp"
+	f, err := os.OpenFile(tmpFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
+	// Careful: deferred Close() might mask write errors if we don't check carefully,
+	// but for atomic save, the critical part is Sync() and Rename().
+	// We will manually close before rename.
 	defer f.Close()
 
 	if _, err := f.Write(data); err != nil {
 		return err
 	}
-	return f.Sync() // Ensure data is flushed to physical disk
+
+	// 2. Sync to ensure data is on physical disk
+	if err := f.Sync(); err != nil {
+		return err
+	}
+
+	// Close explicitly before rename (required on Windows)
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	// 3. Atomic Rename
+	return os.Rename(tmpFile, dbFile)
 }
 
 // authMiddleware enforces presence of a valid 'Authorization' header.
@@ -305,12 +316,7 @@ func (s *Server) handleSet(w http.ResponseWriter, r *http.Request) {
 	user := r.Header.Get("Authorization")
 	s.logTransaction(user, "SET", req.Amount)
 
-	fmt.Fprintf(w, "%d", s.balance) // Keep returning raw int for now, or update to JSON?
-	// Requirement implies app overhaul. The client expects raw int from /spend /set based on old code.
-	// I should probably keep it consistent or updated.
-	// Old client code: updateDisplay(parseInt(text, 10));
-	// So returning raw int is safer for /set and /spend until I update client fully.
-	// But /get must return JSON.
+	fmt.Fprintf(w, "%d", s.balance)
 }
 
 // handleSpend subtracts an amount from the balance.
